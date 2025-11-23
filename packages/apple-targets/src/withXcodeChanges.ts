@@ -1297,19 +1297,51 @@ async function applyXcodeChanges(
       return "Embed Foundation Extensions";
     })();
 
-    let copyPhase = parentTargetForLinking.props.buildPhases.find((phase) => {
+    // Find all copy phases with this name (there might be duplicates from previous builds)
+    const allCopyPhases = parentTargetForLinking.props.buildPhases.filter((phase) => {
       return (
         PBXCopyFilesBuildPhase.is(phase) &&
         phase.props.name === WELL_KNOWN_COPY_EXTENSIONS_NAME
       );
-    }) as PBXCopyFilesBuildPhase | undefined;
+    }) as PBXCopyFilesBuildPhase[];
 
-    if (!copyPhase) {
+    let copyPhase: PBXCopyFilesBuildPhase;
+
+    if (allCopyPhases.length === 0) {
+      // No copy phase exists, create one
       copyPhase = parentTargetForLinking.createBuildPhase(PBXCopyFilesBuildPhase, {
         name: WELL_KNOWN_COPY_EXTENSIONS_NAME,
         files: [],
       });
       copyPhase.ensureDefaultsForTarget(targetToUpdate);
+    } else if (allCopyPhases.length === 1) {
+      // One copy phase exists, use it
+      copyPhase = allCopyPhases[0];
+    } else {
+      // Multiple copy phases exist (duplicates), merge them
+      console.warn(
+        `[@bacons/apple-targets] Found ${allCopyPhases.length} duplicate "${WELL_KNOWN_COPY_EXTENSIONS_NAME}" phases in "${parentTargetForLinking.props.name}". Merging into one.`
+      );
+      copyPhase = allCopyPhases[0];
+
+      // Collect all unique build files from all phases
+      const allBuildFiles = new Set<PBXBuildFile>();
+      for (const phase of allCopyPhases) {
+        for (const file of phase.props.files) {
+          allBuildFiles.add(file);
+        }
+      }
+
+      // Remove duplicate phases from the target
+      for (let i = 1; i < allCopyPhases.length; i++) {
+        const index = parentTargetForLinking.props.buildPhases.indexOf(allCopyPhases[i]);
+        if (index > -1) {
+          parentTargetForLinking.props.buildPhases.splice(index, 1);
+        }
+      }
+
+      // Update the remaining phase with all unique files
+      copyPhase.props.files = Array.from(allBuildFiles);
     }
 
     // Check if the target's product is already embedded
