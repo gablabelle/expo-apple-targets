@@ -1225,84 +1225,6 @@ async function applyXcodeChanges(
         appExtensionBuildFile.props.fileRef /* alphaExtension.appex */,
       productType: productType,
     });
-
-    // Determine the parent target for embedding based on configuration
-    let parentTarget: PBXNativeTarget | undefined;
-
-    if (props.disableAutolinking) {
-      // Skip auto-linking entirely if disabled
-      console.log(
-        `[@bacons/apple-targets] Auto-linking disabled for "${props.name}" - target will not be embedded or added as dependency`
-      );
-    } else if (props.parentTarget) {
-      // Find the specified parent target by name
-      parentTarget = findTargetByName(project, props.parentTarget);
-
-      if (!parentTarget) {
-        const availableTargets = project.rootObject.props.targets
-          .filter((t) => PBXNativeTarget.is(t))
-          .map(
-            (t) =>
-              (t as PBXNativeTarget).props.name ||
-              (t as PBXNativeTarget).props.productName
-          )
-          .join(", ");
-
-        throw new Error(
-          `[@bacons/apple-targets] Could not find parent target "${props.parentTarget}" for extension "${props.name}". ` +
-            `Available targets: ${availableTargets}`
-        );
-      }
-
-      console.log(
-        `[@bacons/apple-targets] Embedding "${props.name}" into parent target: ${parentTarget.props.name || parentTarget.props.productName}`
-      );
-    } else {
-      // Default behavior: use main app target
-      parentTarget = mainAppTarget;
-    }
-
-    // Perform the actual linking if a parent target was determined
-    if (parentTarget) {
-      // Get or create the appropriate copy build phase for embedding extensions
-      const WELL_KNOWN_COPY_EXTENSIONS_NAME = (() => {
-        if (
-          targetToUpdate.props.productType ===
-          "com.apple.product-type.application.on-demand-install-capable"
-        ) {
-          return "Embed App Clips";
-        } else if (
-          targetToUpdate.props.productType === "com.apple.product-type.application"
-        ) {
-          return "Embed Watch Content";
-        } else if (
-          targetToUpdate.props.productType ===
-          "com.apple.product-type.extensionkit-extension"
-        ) {
-          return "Embed ExtensionKit Extensions";
-        }
-        return "Embed Foundation Extensions";
-      })();
-
-      let copyPhase = parentTarget.props.buildPhases.find((phase) => {
-        return (
-          PBXCopyFilesBuildPhase.is(phase) &&
-          phase.props.name === WELL_KNOWN_COPY_EXTENSIONS_NAME
-        );
-      }) as PBXCopyFilesBuildPhase | undefined;
-
-      if (!copyPhase) {
-        copyPhase = parentTarget.createBuildPhase(PBXCopyFilesBuildPhase, {
-          name: WELL_KNOWN_COPY_EXTENSIONS_NAME,
-          files: [],
-        });
-        copyPhase.ensureDefaultsForTarget(targetToUpdate);
-      }
-
-      if (!copyPhase.getBuildFile(appExtensionBuildFile.props.fileRef)) {
-        copyPhase.props.files.push(appExtensionBuildFile);
-      }
-    }
   }
 
   configureTargetWithKnownSettings(targetToUpdate);
@@ -1317,14 +1239,85 @@ async function applyXcodeChanges(
 
   configureJsExport(targetToUpdate);
 
-  // Add target dependency only if auto-linking is enabled
-  if (!props.disableAutolinking) {
-    const parentTarget = props.parentTarget
-      ? findTargetByName(project, props.parentTarget)
-      : mainAppTarget;
-    if (parentTarget) {
-      parentTarget.addDependency(targetToUpdate);
+  // Determine the parent target for embedding and dependency based on configuration
+  let parentTargetForLinking: PBXNativeTarget | undefined;
+
+  if (props.disableAutolinking) {
+    // Skip auto-linking entirely if disabled
+    console.log(
+      `[@bacons/apple-targets] Auto-linking disabled for "${props.name}" - target will not be embedded or added as dependency`
+    );
+  } else if (props.parentTarget) {
+    // Find the specified parent target by name
+    parentTargetForLinking = findTargetByName(project, props.parentTarget);
+
+    if (!parentTargetForLinking) {
+      const availableTargets = project.rootObject.props.targets
+        .filter((t) => PBXNativeTarget.is(t))
+        .map(
+          (t) =>
+            (t as PBXNativeTarget).props.name ||
+            (t as PBXNativeTarget).props.productName
+        )
+        .join(", ");
+
+      throw new Error(
+        `[@bacons/apple-targets] Could not find parent target "${props.parentTarget}" for extension "${props.name}". ` +
+          `Available targets: ${availableTargets}`
+      );
     }
+
+    console.log(
+      `[@bacons/apple-targets] Embedding "${props.name}" into parent target: ${parentTargetForLinking.props.name || parentTargetForLinking.props.productName}`
+    );
+  } else {
+    // Default behavior: use main app target
+    parentTargetForLinking = mainAppTarget;
+  }
+
+  // Perform the actual embedding and dependency if a parent target was determined
+  if (parentTargetForLinking) {
+    // Get or create the appropriate copy build phase for embedding extensions
+    const WELL_KNOWN_COPY_EXTENSIONS_NAME = (() => {
+      if (
+        targetToUpdate.props.productType ===
+        "com.apple.product-type.application.on-demand-install-capable"
+      ) {
+        return "Embed App Clips";
+      } else if (
+        targetToUpdate.props.productType === "com.apple.product-type.application"
+      ) {
+        return "Embed Watch Content";
+      } else if (
+        targetToUpdate.props.productType ===
+        "com.apple.product-type.extensionkit-extension"
+      ) {
+        return "Embed ExtensionKit Extensions";
+      }
+      return "Embed Foundation Extensions";
+    })();
+
+    let copyPhase = parentTargetForLinking.props.buildPhases.find((phase) => {
+      return (
+        PBXCopyFilesBuildPhase.is(phase) &&
+        phase.props.name === WELL_KNOWN_COPY_EXTENSIONS_NAME
+      );
+    }) as PBXCopyFilesBuildPhase | undefined;
+
+    if (!copyPhase) {
+      copyPhase = parentTargetForLinking.createBuildPhase(PBXCopyFilesBuildPhase, {
+        name: WELL_KNOWN_COPY_EXTENSIONS_NAME,
+        files: [],
+      });
+      copyPhase.ensureDefaultsForTarget(targetToUpdate);
+    }
+
+    if (!copyPhase.getBuildFile(appExtensionBuildFile.props.fileRef)) {
+      copyPhase.props.files.push(appExtensionBuildFile);
+    }
+
+    // Add target dependency
+    parentTargetForLinking.addDependency(targetToUpdate);
   }
 
   const assetsDir = path.join(magicCwd, "assets");
