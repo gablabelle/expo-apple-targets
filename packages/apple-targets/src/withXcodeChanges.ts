@@ -19,6 +19,7 @@ import path from "path";
 
 import {
   ExtensionType,
+  findTargetByName,
   getMainAppTarget,
   isNativeTargetOfType,
   needsEmbeddedSwift,
@@ -73,6 +74,12 @@ export type XcodeSettings = {
   orientation?: "default" | "portrait" | "landscape";
 
   deviceFamilies?: DeviceFamily[];
+
+  /** Parent target name to embed this extension into. If not provided, uses main app target. */
+  parentTarget?: string;
+
+  /** If true, disables automatic linking to parent target. */
+  disableAutolinking?: boolean;
 };
 
 export type DeviceFamily = "phone" | "tablet";
@@ -1218,10 +1225,49 @@ async function applyXcodeChanges(
       productType: productType,
     });
 
-    const copyPhase = mainAppTarget.getCopyBuildPhaseForTarget(targetToUpdate);
+    // Determine the parent target for embedding based on configuration
+    let parentTarget: PBXNativeTarget | undefined;
 
-    if (!copyPhase.getBuildFile(appExtensionBuildFile.props.fileRef)) {
-      copyPhase.props.files.push(appExtensionBuildFile);
+    if (props.disableAutolinking) {
+      // Skip auto-linking entirely if disabled
+      console.log(
+        `[@bacons/apple-targets] Auto-linking disabled for "${props.name}" - target will not be embedded or added as dependency`
+      );
+    } else if (props.parentTarget) {
+      // Find the specified parent target by name
+      parentTarget = findTargetByName(project, props.parentTarget);
+
+      if (!parentTarget) {
+        const availableTargets = project.rootObject.props.targets
+          .filter((t) => PBXNativeTarget.is(t))
+          .map(
+            (t) =>
+              (t as PBXNativeTarget).props.name ||
+              (t as PBXNativeTarget).props.productName
+          )
+          .join(", ");
+
+        throw new Error(
+          `[@bacons/apple-targets] Could not find parent target "${props.parentTarget}" for extension "${props.name}". ` +
+            `Available targets: ${availableTargets}`
+        );
+      }
+
+      console.log(
+        `[@bacons/apple-targets] Embedding "${props.name}" into parent target: ${parentTarget.props.name || parentTarget.props.productName}`
+      );
+    } else {
+      // Default behavior: use main app target
+      parentTarget = mainAppTarget;
+    }
+
+    // Perform the actual linking if a parent target was determined
+    if (parentTarget) {
+      const copyPhase = parentTarget.getCopyBuildPhaseForTarget(targetToUpdate);
+
+      if (!copyPhase.getBuildFile(appExtensionBuildFile.props.fileRef)) {
+        copyPhase.props.files.push(appExtensionBuildFile);
+      }
     }
   }
 
@@ -1237,7 +1283,15 @@ async function applyXcodeChanges(
 
   configureJsExport(targetToUpdate);
 
-  mainAppTarget.addDependency(targetToUpdate);
+  // Add target dependency only if auto-linking is enabled
+  if (!props.disableAutolinking) {
+    const parentTarget = props.parentTarget
+      ? findTargetByName(project, props.parentTarget)
+      : mainAppTarget;
+    if (parentTarget) {
+      parentTarget.addDependency(targetToUpdate);
+    }
+  }
 
   const assetsDir = path.join(magicCwd, "assets");
 
