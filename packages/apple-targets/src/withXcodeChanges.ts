@@ -1263,8 +1263,40 @@ async function applyXcodeChanges(
 
     // Perform the actual linking if a parent target was determined
     if (parentTarget) {
-      // Use getOrCreateCopyBuildPhase which works on any target (not just main app)
-      const copyPhase = parentTarget.getOrCreateCopyBuildPhase(targetToUpdate);
+      // Get or create the appropriate copy build phase for embedding extensions
+      const WELL_KNOWN_COPY_EXTENSIONS_NAME = (() => {
+        if (
+          targetToUpdate.props.productType ===
+          "com.apple.product-type.application.on-demand-install-capable"
+        ) {
+          return "Embed App Clips";
+        } else if (
+          targetToUpdate.props.productType === "com.apple.product-type.application"
+        ) {
+          return "Embed Watch Content";
+        } else if (
+          targetToUpdate.props.productType ===
+          "com.apple.product-type.extensionkit-extension"
+        ) {
+          return "Embed ExtensionKit Extensions";
+        }
+        return "Embed Foundation Extensions";
+      })();
+
+      let copyPhase = parentTarget.props.buildPhases.find((phase) => {
+        return (
+          PBXCopyFilesBuildPhase.is(phase) &&
+          phase.props.name === WELL_KNOWN_COPY_EXTENSIONS_NAME
+        );
+      }) as PBXCopyFilesBuildPhase | undefined;
+
+      if (!copyPhase) {
+        copyPhase = parentTarget.createBuildPhase(PBXCopyFilesBuildPhase, {
+          name: WELL_KNOWN_COPY_EXTENSIONS_NAME,
+          files: [],
+        });
+        copyPhase.ensureDefaultsForTarget(targetToUpdate);
+      }
 
       if (!copyPhase.getBuildFile(appExtensionBuildFile.props.fileRef)) {
         copyPhase.props.files.push(appExtensionBuildFile);
