@@ -1239,31 +1239,6 @@ async function applyXcodeChanges(
 
   configureJsExport(targetToUpdate);
 
-  // Get or create the build file for embedding this target
-  // For new targets, this was created in the else block above
-  // For existing targets, we need to find it or create it
-  let appExtensionBuildFile = Array.from(project.entries()).find(
-    ([, entry]) =>
-      PBXBuildFile.is(entry) &&
-      entry.props.fileRef?.uuid === targetToUpdate!.props.productReference?.uuid
-  )?.[1] as PBXBuildFile | undefined;
-
-  if (!appExtensionBuildFile && targetToUpdate!.props.productReference) {
-    // Create a build file wrapper for the existing product reference
-    appExtensionBuildFile = PBXBuildFile.create(project, {
-      fileRef: targetToUpdate!.props.productReference,
-      settings: {
-        ATTRIBUTES: ["RemoveHeadersOnCopy"],
-      },
-    });
-  }
-
-  // Ensure appExtensionBuildFile exists for embedding
-  if (!appExtensionBuildFile) {
-    console.warn(`[@bacons/apple-targets] Could not create build file for "${props.name}" - skipping embedding`);
-    return;
-  }
-
   // Determine the parent target for embedding and dependency based on configuration
   let parentTargetForLinking: PBXNativeTarget | undefined;
 
@@ -1337,7 +1312,17 @@ async function applyXcodeChanges(
       copyPhase.ensureDefaultsForTarget(targetToUpdate);
     }
 
-    if (!copyPhase.getBuildFile(appExtensionBuildFile.props.fileRef)) {
+    // Check if the target's product is already embedded
+    const existingBuildFile = copyPhase.getBuildFile(targetToUpdate.props.productReference);
+
+    if (!existingBuildFile) {
+      // Create a build file wrapper for the product reference
+      const appExtensionBuildFile = PBXBuildFile.create(project, {
+        fileRef: targetToUpdate.props.productReference!,
+        settings: {
+          ATTRIBUTES: ["RemoveHeadersOnCopy"],
+        },
+      });
       copyPhase.props.files.push(appExtensionBuildFile);
     }
 
