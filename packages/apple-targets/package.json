@@ -33,7 +33,7 @@
   "author": "Evan Bacon",
   "license": "MIT",
   "dependencies": {
-    "@bacons/xcode": "github:gablabelle/xcode#009ae232a761ab1c03b8f3796f3579e5e0510d6f",
+    "@bacons/xcode": "1.0.0-alpha.27",
     "@react-native/normalize-colors": "^0.79.2",
     "glob": "^10.4.2",
     "debug": "^4.3.4"
