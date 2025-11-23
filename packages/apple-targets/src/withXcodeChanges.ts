@@ -1,5 +1,6 @@
 import {
   PBXBuildFile,
+  PBXCopyFilesBuildPhase,
   PBXFileReference,
   PBXFileSystemSynchronizedBuildFileExceptionSet,
   PBXFileSystemSynchronizedRootGroup,
