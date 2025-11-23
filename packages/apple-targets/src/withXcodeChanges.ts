@@ -1313,17 +1313,21 @@ async function applyXcodeChanges(
     }
 
     // Check if the target's product is already embedded
-    const existingBuildFile = copyPhase.getBuildFile(targetToUpdate.props.productReference);
+    if (!targetToUpdate.props.productReference) {
+      console.warn(`[@bacons/apple-targets] No product reference found for "${props.name}" - skipping embedding`);
+    } else {
+      const existingBuildFile = copyPhase.getBuildFile(targetToUpdate.props.productReference);
 
-    if (!existingBuildFile) {
-      // Create a build file wrapper for the product reference
-      const appExtensionBuildFile = PBXBuildFile.create(project, {
-        fileRef: targetToUpdate.props.productReference!,
-        settings: {
-          ATTRIBUTES: ["RemoveHeadersOnCopy"],
-        },
-      });
-      copyPhase.props.files.push(appExtensionBuildFile);
+      if (!existingBuildFile) {
+        // Create a build file wrapper for the product reference
+        const appExtensionBuildFile = PBXBuildFile.create(project, {
+          fileRef: targetToUpdate.props.productReference,
+          settings: {
+            ATTRIBUTES: ["RemoveHeadersOnCopy"],
+          },
+        });
+        copyPhase.props.files.push(appExtensionBuildFile);
+      }
     }
 
     // Add target dependency
