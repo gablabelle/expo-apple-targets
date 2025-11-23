@@ -1263,7 +1263,8 @@ async function applyXcodeChanges(
 
     // Perform the actual linking if a parent target was determined
     if (parentTarget) {
-      const copyPhase = parentTarget.getCopyBuildPhaseForTarget(targetToUpdate);
+      // Use getOrCreateCopyBuildPhase which works on any target (not just main app)
+      const copyPhase = parentTarget.getOrCreateCopyBuildPhase(targetToUpdate);
 
       if (!copyPhase.getBuildFile(appExtensionBuildFile.props.fileRef)) {
         copyPhase.props.files.push(appExtensionBuildFile);
