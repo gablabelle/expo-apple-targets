@@ -1277,6 +1277,10 @@ async function applyXcodeChanges(
 
   // Perform the actual embedding and dependency if a parent target was determined
   if (parentTargetForLinking) {
+    console.log(
+      `[@bacons/apple-targets] Processing embedding for "${props.name}" into "${parentTargetForLinking.props.name}"`
+    );
+
     // Get or create the appropriate copy build phase for embedding extensions
     const WELL_KNOWN_COPY_EXTENSIONS_NAME = (() => {
       if (
