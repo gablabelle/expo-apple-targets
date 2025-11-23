@@ -1351,6 +1351,9 @@ async function applyXcodeChanges(
       const existingBuildFile = copyPhase.getBuildFile(targetToUpdate.props.productReference);
 
       if (!existingBuildFile) {
+        console.log(
+          `[@bacons/apple-targets] Creating build file for "${props.name}" in "${parentTargetForLinking.props.name}" copy phase "${WELL_KNOWN_COPY_EXTENSIONS_NAME}"`
+        );
         // Create a build file wrapper for the product reference
         const appExtensionBuildFile = PBXBuildFile.create(project, {
           fileRef: targetToUpdate.props.productReference,
@@ -1359,6 +1362,10 @@ async function applyXcodeChanges(
           },
         });
         copyPhase.props.files.push(appExtensionBuildFile);
+      } else {
+        console.log(
+          `[@bacons/apple-targets] Build file for "${props.name}" already exists in "${parentTargetForLinking.props.name}" copy phase "${WELL_KNOWN_COPY_EXTENSIONS_NAME}" - skipping`
+        );
       }
     }
 
