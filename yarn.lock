@@ -1149,7 +1149,7 @@
     "@babel/helper-string-parser" "^7.25.9"
     "@babel/helper-validator-identifier" "^7.25.9"
 
-"@bacons/xcode@github:gablabelle/xcode#allow-copy-phase-any-target":
+"@bacons/xcode@github:gablabelle/xcode#d1b37aa2dd38d2c91b69d374be2d62ffda6b5e80":
   version "1.0.0-alpha.27"
   resolved "https://codeload.github.com/gablabelle/xcode/tar.gz/d1b37aa2dd38d2c91b69d374be2d62ffda6b5e80"
   dependencies:
