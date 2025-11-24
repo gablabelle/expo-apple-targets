@@ -726,8 +726,8 @@ function createConfigurationListForType(project, props) {
     }
 }
 async function applyXcodeChanges(config, project, props) {
-    var _a, _b;
-    var _c;
+    var _a;
+    var _b;
     const mainAppTarget = (0, target_1.getMainAppTarget)(project);
     // Special setting for share extensions.
     if ((0, target_1.needsEmbeddedSwift)(props.type)) {
@@ -741,7 +741,7 @@ async function applyXcodeChanges(config, project, props) {
     }
     const targets = getExtensionTargets();
     const productName = props.productName;
-    let targetToUpdate = (_a = targets.find((target) => target.props.productName === productName)) !== null && _a !== void 0 ? _a : targets[0];
+    let targetToUpdate = targets.find((target) => target.props.productName === productName);
     if (targetToUpdate) {
         console.log(`Target "${targetToUpdate.props.productName}" already exists, updating instead of creating a new one`);
     }
@@ -1073,7 +1073,7 @@ async function applyXcodeChanges(config, project, props) {
     }
     // If there's a `_shared` folder, create a PBXFileSystemSynchronizedBuildFileExceptionSet and set the `target` to the main app target. Then add exceptions to the new target's PBXFileSystemSynchronizedRootGroup's exceptions. Finally, ensure the relative paths for each file in the _shared folder are added to the `membershipExceptions` array.
     (0, assert_1.default)(syncRootGroup instanceof xcode_1.PBXFileSystemSynchronizedRootGroup);
-    (_b = (_c = syncRootGroup.props).exceptions) !== null && _b !== void 0 ? _b : (_c.exceptions = []);
+    (_a = (_b = syncRootGroup.props).exceptions) !== null && _a !== void 0 ? _a : (_b.exceptions = []);
     const existingExceptionSet = syncRootGroup.props.exceptions.find((exception) => exception instanceof xcode_1.PBXFileSystemSynchronizedBuildFileExceptionSet &&
         exception.props.target === mainAppTarget);
     if (sharedAssets.length) {
