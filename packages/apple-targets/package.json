@@ -19,7 +19,9 @@
     "test": "jest --watch",
     "prepare": "expo-module prepare",
     "prepublishOnly": "expo-module prepublishOnly",
-    "expo-module": "expo-module"
+    "expo-module": "expo-module",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
   },
   "repository": {
     "type": "git",
@@ -36,7 +38,10 @@
     "@bacons/xcode": "1.0.0-alpha.27",
     "@react-native/normalize-colors": "^0.79.2",
     "glob": "^10.4.2",
-    "debug": "^4.3.4"
+    "debug": "^4.3.4",
+    "expo": "~53.0.24",
+    "react": "19.0.0",
+    "react-native": "0.79.6"
   },
   "devDependencies": {
     "@types/debug": "^4.1.7",

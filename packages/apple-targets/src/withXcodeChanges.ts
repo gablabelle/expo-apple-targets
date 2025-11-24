@@ -1171,6 +1171,7 @@ async function applyXcodeChanges(
   }
 
   if (targetToUpdate) {
+    console.log(`[@bacons/apple-targets] Target "${props.name}" already exists, updating instead of creating a new one`);
     // Remove existing build phases
     targetToUpdate.props.buildConfigurationList.props.buildConfigurations.forEach(
       (config) => {
@@ -1192,6 +1193,7 @@ async function applyXcodeChanges(
     targetToUpdate.props.buildConfigurationList =
       createConfigurationListForType(project, props);
   } else {
+    console.log(`[@bacons/apple-targets] Creating new target "${props.name}"`);
     const productType = productTypeForType(props.type);
     const isExtension = productType === "com.apple.product-type.app-extension";
     const isExtensionKit =

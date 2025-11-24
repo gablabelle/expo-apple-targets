@@ -726,8 +726,8 @@ function createConfigurationListForType(project, props) {
     }
 }
 async function applyXcodeChanges(config, project, props) {
-    var _a, _b, _c;
-    var _d;
+    var _a, _b;
+    var _c;
     const mainAppTarget = (0, target_1.getMainAppTarget)(project);
     // Special setting for share extensions.
     if ((0, target_1.needsEmbeddedSwift)(props.type)) {
@@ -861,6 +861,7 @@ async function applyXcodeChanges(config, project, props) {
         }
     }
     if (targetToUpdate) {
+        console.log(`[@bacons/apple-targets] Target "${props.name}" already exists, updating instead of creating a new one`);
         // Remove existing build phases
         targetToUpdate.props.buildConfigurationList.props.buildConfigurations.forEach((config) => {
             config.getReferrers().forEach((ref) => {
@@ -880,6 +881,7 @@ async function applyXcodeChanges(config, project, props) {
             createConfigurationListForType(project, props);
     }
     else {
+        console.log(`[@bacons/apple-targets] Creating new target "${props.name}"`);
         const productType = (0, target_1.productTypeForType)(props.type);
         const isExtension = productType === "com.apple.product-type.app-extension";
         const isExtensionKit = productType === "com.apple.product-type.extensionkit-extension";
@@ -915,28 +917,6 @@ async function applyXcodeChanges(config, project, props) {
     targetToUpdate.getSourcesBuildPhase();
     targetToUpdate.getResourcesBuildPhase();
     configureJsExport(targetToUpdate);
-    // Get or create the build file for embedding this target
-    // For new targets, this was created in the else block above
-    // For existing targets, we need to find it or create it
-    let appExtensionBuildFile = (_b = Array.from(project.entries()).find(([, entry]) => {
-        var _a, _b;
-        return xcode_1.PBXBuildFile.is(entry) &&
-            ((_a = entry.props.fileRef) === null || _a === void 0 ? void 0 : _a.uuid) === ((_b = targetToUpdate.props.productReference) === null || _b === void 0 ? void 0 : _b.uuid);
-    })) === null || _b === void 0 ? void 0 : _b[1];
-    if (!appExtensionBuildFile && targetToUpdate.props.productReference) {
-        // Create a build file wrapper for the existing product reference
-        appExtensionBuildFile = xcode_1.PBXBuildFile.create(project, {
-            fileRef: targetToUpdate.props.productReference,
-            settings: {
-                ATTRIBUTES: ["RemoveHeadersOnCopy"],
-            },
-        });
-    }
-    // Ensure appExtensionBuildFile exists for embedding
-    if (!appExtensionBuildFile) {
-        console.warn(`[@bacons/apple-targets] Could not create build file for "${props.name}" - skipping embedding`);
-        return;
-    }
     // Determine the parent target for embedding and dependency based on configuration
     let parentTargetForLinking;
     if (props.disableAutolinking) {
@@ -963,6 +943,7 @@ async function applyXcodeChanges(config, project, props) {
     }
     // Perform the actual embedding and dependency if a parent target was determined
     if (parentTargetForLinking) {
+        console.log(`[@bacons/apple-targets] Processing embedding for "${props.name}" into "${parentTargetForLinking.props.name}"`);
         // Get or create the appropriate copy build phase for embedding extensions
         const WELL_KNOWN_COPY_EXTENSIONS_NAME = (() => {
             if (targetToUpdate.props.productType ===
@@ -978,19 +959,65 @@ async function applyXcodeChanges(config, project, props) {
             }
             return "Embed Foundation Extensions";
         })();
-        let copyPhase = parentTargetForLinking.props.buildPhases.find((phase) => {
+        // Find all copy phases with this name (there might be duplicates from previous builds)
+        const allCopyPhases = parentTargetForLinking.props.buildPhases.filter((phase) => {
             return (xcode_1.PBXCopyFilesBuildPhase.is(phase) &&
                 phase.props.name === WELL_KNOWN_COPY_EXTENSIONS_NAME);
         });
-        if (!copyPhase) {
+        let copyPhase;
+        if (allCopyPhases.length === 0) {
+            // No copy phase exists, create one
             copyPhase = parentTargetForLinking.createBuildPhase(xcode_1.PBXCopyFilesBuildPhase, {
                 name: WELL_KNOWN_COPY_EXTENSIONS_NAME,
                 files: [],
             });
             copyPhase.ensureDefaultsForTarget(targetToUpdate);
         }
-        if (!copyPhase.getBuildFile(appExtensionBuildFile.props.fileRef)) {
-            copyPhase.props.files.push(appExtensionBuildFile);
+        else if (allCopyPhases.length === 1) {
+            // One copy phase exists, use it
+            copyPhase = allCopyPhases[0];
+        }
+        else {
+            // Multiple copy phases exist (duplicates), merge them
+            console.warn(`[@bacons/apple-targets] Found ${allCopyPhases.length} duplicate "${WELL_KNOWN_COPY_EXTENSIONS_NAME}" phases in "${parentTargetForLinking.props.name}". Merging into one.`);
+            copyPhase = allCopyPhases[0];
+            // Collect all unique build files from all phases
+            const allBuildFiles = new Set();
+            for (const phase of allCopyPhases) {
+                for (const file of phase.props.files) {
+                    allBuildFiles.add(file);
+                }
+            }
+            // Remove duplicate phases from the target
+            for (let i = 1; i < allCopyPhases.length; i++) {
+                const index = parentTargetForLinking.props.buildPhases.indexOf(allCopyPhases[i]);
+                if (index > -1) {
+                    parentTargetForLinking.props.buildPhases.splice(index, 1);
+                }
+            }
+            // Update the remaining phase with all unique files
+            copyPhase.props.files = Array.from(allBuildFiles);
+        }
+        // Check if the target's product is already embedded
+        if (!targetToUpdate.props.productReference) {
+            console.warn(`[@bacons/apple-targets] No product reference found for "${props.name}" - skipping embedding`);
+        }
+        else {
+            const existingBuildFile = copyPhase.getBuildFile(targetToUpdate.props.productReference);
+            if (!existingBuildFile) {
+                console.log(`[@bacons/apple-targets] Creating build file for "${props.name}" in "${parentTargetForLinking.props.name}" copy phase "${WELL_KNOWN_COPY_EXTENSIONS_NAME}"`);
+                // Create a build file wrapper for the product reference
+                const appExtensionBuildFile = xcode_1.PBXBuildFile.create(project, {
+                    fileRef: targetToUpdate.props.productReference,
+                    settings: {
+                        ATTRIBUTES: ["RemoveHeadersOnCopy"],
+                    },
+                });
+                copyPhase.props.files.push(appExtensionBuildFile);
+            }
+            else {
+                console.log(`[@bacons/apple-targets] Build file for "${props.name}" already exists in "${parentTargetForLinking.props.name}" copy phase "${WELL_KNOWN_COPY_EXTENSIONS_NAME}" - skipping`);
+            }
         }
         // Add target dependency
         parentTargetForLinking.addDependency(targetToUpdate);
@@ -1046,7 +1073,7 @@ async function applyXcodeChanges(config, project, props) {
     }
     // If there's a `_shared` folder, create a PBXFileSystemSynchronizedBuildFileExceptionSet and set the `target` to the main app target. Then add exceptions to the new target's PBXFileSystemSynchronizedRootGroup's exceptions. Finally, ensure the relative paths for each file in the _shared folder are added to the `membershipExceptions` array.
     (0, assert_1.default)(syncRootGroup instanceof xcode_1.PBXFileSystemSynchronizedRootGroup);
-    (_c = (_d = syncRootGroup.props).exceptions) !== null && _c !== void 0 ? _c : (_d.exceptions = []);
+    (_b = (_c = syncRootGroup.props).exceptions) !== null && _b !== void 0 ? _b : (_c.exceptions = []);
     const existingExceptionSet = syncRootGroup.props.exceptions.find((exception) => exception instanceof xcode_1.PBXFileSystemSynchronizedBuildFileExceptionSet &&
         exception.props.target === mainAppTarget);
     if (sharedAssets.length) {
